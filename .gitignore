@@ -61,12 +61,6 @@ logs/
 *.log
 log_*.log
 
-# Model & Data Artifacts (Large files)
-artifacts/model.h5
-artifacts/*.pkl
-artifacts/ingested_data.csv
-artifacts/train.csv
-artifacts/test.csv
 
 # Large data files
 notebook/Data/
