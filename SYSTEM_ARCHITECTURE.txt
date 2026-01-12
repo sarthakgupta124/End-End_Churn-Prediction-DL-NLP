@@ -1,0 +1,345 @@
+# 🎯 Complete System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         CHURN DETECTION SYSTEM                           │
+│                    Complete ML Pipeline with Streamlit UI                │
+└──────────────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════════
+                            TRAINING PHASE
+════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────┐
+│  Raw CSV Data   │  notebook/Data/datapoints.csv (37K rows, 25 cols)
+│  36,993 records │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     DATA INGESTION                                  │
+│  src/components/data_ingestion.py                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│  • Load CSV                                                         │
+│  • Drop unnecessary columns: customer_id, Name, security_no, etc.   │
+│  • Save to: artifacts/ingested_data.csv                            │
+└─────────┬───────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   DATA TRANSFORMATION                               │
+│  src/components/data_transformation.py                              │
+├─────────────────────────────────────────────────────────────────────┤
+│  STEP 1: Binary Transformations                                     │
+│  ├─ gender: M→1, F→0                                               │
+│  ├─ joined_through_referral: Yes→1, No→0                           │
+│  ├─ used_special_discount: Yes→1, No→0                             │
+│  ├─ offer_application_preference: Yes→1, No→0                      │
+│  ├─ past_complaint: Yes→1, No→0                                    │
+│  └─ complaint_status: Custom mapping to 0/1                        │
+│                                                                      │
+│  STEP 2: Feature Engineering                                        │
+│  ├─ joining_date → joining_year, joining_month, joining_day        │
+│  └─ last_visit_time → last_visit_hour, last_visit_min, _second    │
+│                                                                      │
+│  STEP 3: Missing Value Handling                                     │
+│  ├─ Categorical: Fill with mode                                    │
+│  └─ Numeric: Fill with mean                                        │
+│                                                                      │
+│  STEP 4: Train/Test Split (70/30)                                   │
+│  └─ X_train, X_test, y_train, y_test                               │
+│                                                                      │
+│  STEP 5: Categorical Encoding (OneHotEncoder)                       │
+│  ├─ Columns: region_category, membership_category,                 │
+│  │           preferred_offer_types, medium_of_operation,            │
+│  │           internet_option                                        │
+│  ├─ Creates ~20-30 new columns                                     │
+│  └─ SAVE: artifacts/preprocessor.pkl ⭐                            │
+│                                                                      │
+│  STEP 6: Feedback Text Processing                                   │
+│  ├─ Clean text: Remove special chars, URLs, stopwords              │
+│  ├─ Convert to lowercase                                           │
+│  ├─ Word2Vec vectorization (300 dimensions)                        │
+│  └─ Creates feedback_vec_0 through feedback_vec_299                │
+│                                                                      │
+│  STEP 7: Feature Scaling (StandardScaler)                           │
+│  ├─ Scale ALL features (numeric + encoded + feedback)              │
+│  └─ SAVE: artifacts/scaler.pkl ⭐                                  │
+│                                                                      │
+│  STEP 8: Label Processing                                           │
+│  ├─ Clip churn_risk_score to 1-5 range                            │
+│  └─ Shift to 0-4 for neural network (softmax)                     │
+│                                                                      │
+│  OUTPUT:                                                            │
+│  ├─ artifacts/train.csv                                            │
+│  └─ artifacts/test.csv                                             │
+└─────────┬───────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      MODEL TRAINING                                 │
+│  src/components/Model_trainer.py                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Neural Network Architecture:                                       │
+│  ┌────────────────────────────────────────┐                        │
+│  │ Input Layer (340+ features)            │                        │
+│  │         ↓                              │                        │
+│  │ Dense(512, relu) + BatchNorm + Dropout │                        │
+│  │         ↓                              │                        │
+│  │ Dense(256, relu) + BatchNorm + Dropout │                        │
+│  │         ↓                              │                        │
+│  │ Dense(128, relu) + Dropout             │                        │
+│  │         ↓                              │                        │
+│  │ Dense(5, softmax)  [Output Layer]      │                        │
+│  └────────────────────────────────────────┘                        │
+│                                                                      │
+│  Training:                                                          │
+│  ├─ Optimizer: Adam                                                │
+│  ├─ Loss: sparse_categorical_crossentropy                          │
+│  ├─ Epochs: 60 (with early stopping)                               │
+│  ├─ Batch Size: 32                                                 │
+│  └─ Validation: X_test, y_test                                     │
+│                                                                      │
+│  OUTPUT:                                                            │
+│  └─ artifacts/model.h5 ⭐ (Trained Neural Network)                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════════
+                          PREDICTION PHASE
+════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                    STREAMLIT WEB INTERFACE                          │
+│  app.py                                                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌────────────────────┐        ┌─────────────────────┐            │
+│  │  Single Customer   │        │   Batch Upload      │            │
+│  │  Input Form        │        │   CSV File          │            │
+│  └─────────┬──────────┘        └──────────┬──────────┘            │
+│            │                              │                         │
+│            └──────────────┬───────────────┘                         │
+│                           ▼                                         │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │         Create DataFrame from Input                │            │
+│  │  {age: 35, gender: 'M', feedback: 'Good', ...}     │            │
+│  └─────────────────────┬──────────────────────────────┘            │
+└────────────────────────┼────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    PREDICTION PIPELINE                              │
+│  src/pipeline/predict_pipeline.py                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│  __init__():                                                        │
+│  ├─ Load artifacts/model.h5                                        │
+│  ├─ Load artifacts/preprocessor.pkl                                │
+│  ├─ Load artifacts/scaler.pkl                                      │
+│  └─ Initialize Word2Vec loader (lazy)                              │
+│                                                                      │
+│  preprocess_data():                                                 │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │ STEP 1: Binary Transformations                     │            │
+│  │ ✅ SAME as training!                               │            │
+│  │ • gender: M→1, F→0                                │            │
+│  │ • referral: Yes→1, No→0                           │            │
+│  │ • All binary columns: Yes→1, No→0                 │            │
+│  │ • complaint_status: Special mapping               │            │
+│  │ • Fill missing: mode/mean                         │            │
+│  └────────────────────────────────────────────────────┘            │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │ STEP 2: Categorical Encoding                       │            │
+│  │ ✅ Use preprocessor.pkl                            │            │
+│  │ • preprocessor.transform(df)                       │            │
+│  │ • OneHot encode 5 categorical columns             │            │
+│  │ • Pass through other columns                      │            │
+│  │ • Output: ~40 columns                             │            │
+│  └────────────────────────────────────────────────────┘            │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │ STEP 3: Feedback Processing                        │            │
+│  │ ✅ SAME as training!                               │            │
+│  │ • feedback.str.lower()                            │            │
+│  │ • clean_feedback(text)                            │            │
+│  │   - Remove special chars                          │            │
+│  │   - Remove stopwords                              │            │
+│  │   - Remove URLs                                   │            │
+│  │ • text_to_vector(text)                            │            │
+│  │   - Split into words                              │            │
+│  │   - Lookup in Word2Vec                            │            │
+│  │   - Average vectors → 300 dims                    │            │
+│  │ • Create 300 columns: feedback_vec_0-299          │            │
+│  │ • Drop original feedback                          │            │
+│  │ • Output: ~340 columns                            │            │
+│  └────────────────────────────────────────────────────┘            │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │ STEP 4: Feature Scaling                            │            │
+│  │ ✅ Use scaler.pkl                                  │            │
+│  │ • scaler.transform(df)                             │            │
+│  │ • Scale ALL 340+ features                          │            │
+│  │ • Output: Scaled feature matrix                   │            │
+│  └────────────────────────────────────────────────────┘            │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │ predict():                                         │            │
+│  │ • model.predict(scaled_data)                       │            │
+│  │ • Get probabilities for 5 classes                  │            │
+│  │ • Select highest probability                       │            │
+│  │ • Convert 0-4 back to 1-5                         │            │
+│  │ • Return:                                          │            │
+│  │   - predictions: [3]                               │            │
+│  │   - confidence: 0.875                              │            │
+│  │   - probabilities: [0.05, 0.12, 0.875, 0.08, 0.02] │            │
+│  └────────────────────────────────────────────────────┘            │
+└─────────────────────┬───────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       RESULT DISPLAY                                │
+│  app.py - Streamlit UI                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────┐            │
+│  │  🎯 Churn Risk Score: 3                            │            │
+│  │  🟠 Moderate Risk                                  │            │
+│  │  Confidence: 87.5%                                 │            │
+│  └────────────────────────────────────────────────────┘            │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────┐            │
+│  │  📊 Probability Distribution                       │            │
+│  │  ████ Score 1 (Very Low):    5.0%                  │            │
+│  │  ████████ Score 2 (Low):    12.0%                  │            │
+│  │  ████████████████████ Score 3 (Mod): 87.5% ⭐     │            │
+│  │  ████ Score 4 (High):        8.0%                  │            │
+│  │  ██ Score 5 (Very High):     2.0%                  │            │
+│  └────────────────────────────────────────────────────┘            │
+│                                                                      │
+│  For Batch Upload:                                                  │
+│  └─ Download CSV with all predictions + probabilities               │
+└─────────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════════
+                          KEY ARTIFACTS
+════════════════════════════════════════════════════════════════════════════
+
+artifacts/
+├── model.h5              ⭐ Trained neural network (5-class classifier)
+├── preprocessor.pkl      ⭐ OneHotEncoder wrapper (ColumnTransformer)
+├── scaler.pkl           ⭐ StandardScaler wrapper (ColumnTransformer)
+├── ingested_data.csv    📄 Cleaned raw data
+├── train.csv            📄 Training set (scaled, 340+ cols)
+└── test.csv             📄 Test set (scaled, 340+ cols)
+
+════════════════════════════════════════════════════════════════════════════
+                          FEATURE FLOW
+════════════════════════════════════════════════════════════════════════════
+
+USER INPUT (24 features)
+    ↓
+Binary Transformations (24 features, values changed)
+    ↓
+Categorical Encoding (~40 features, OneHot expansion)
+    ↓
+Feedback Processing (~340 features, +300 from Word2Vec)
+    ↓
+Scaling (~340 features, standardized)
+    ↓
+MODEL INPUT (340+ features)
+    ↓
+Neural Network Forward Pass
+    ↓
+Softmax Output (5 probabilities)
+    ↓
+Argmax + Shift (Score 1-5)
+
+════════════════════════════════════════════════════════════════════════════
+                       COLUMN COUNT AT EACH STEP
+════════════════════════════════════════════════════════════════════════════
+
+Raw Input:                24 columns
+After Binary:             24 columns (M→1, Yes→1, etc.)
+After OneHot:            ~40 columns (categorical expansion)
+After Feedback:         ~340 columns (+300 from Word2Vec)
+After Scaling:          ~340 columns (scaled values)
+Model Input:            ~340 features
+Model Output:              5 probabilities
+
+════════════════════════════════════════════════════════════════════════════
+                     CRITICAL ALIGNMENT POINTS ✅
+════════════════════════════════════════════════════════════════════════════
+
+1. Binary transformations MUST match exactly
+   Training: M→1, F→0, Yes→1, No→0
+   Prediction: M→1, F→0, Yes→1, No→0  ✅
+
+2. Categorical encoding MUST use same preprocessor
+   Training: Fit OneHotEncoder, save preprocessor.pkl
+   Prediction: Load preprocessor.pkl, transform only  ✅
+
+3. Feedback processing MUST use same method
+   Training: Word2Vec → 300 features
+   Prediction: Word2Vec → 300 features  ✅
+
+4. Scaling MUST use same scaler
+   Training: Fit StandardScaler, save scaler.pkl
+   Prediction: Load scaler.pkl, transform only  ✅
+
+5. Column order MUST match
+   Training: Determined by preprocessing order
+   Prediction: Same preprocessing order  ✅
+
+6. Label conversion
+   Training: 1-5 → 0-4 for model
+   Prediction: Model outputs 0-4 → convert to 1-5  ✅
+
+════════════════════════════════════════════════════════════════════════════
+                          USAGE EXAMPLES
+════════════════════════════════════════════════════════════════════════════
+
+# Train the model
+python src/pipeline/train_pipeline.py
+
+# Run Streamlit app
+streamlit run app.py
+
+# Programmatic prediction
+from src.pipeline.predict_pipeline import PredictionPipeline
+import pandas as pd
+
+pipeline = PredictionPipeline(
+    'artifacts/model.h5',
+    'artifacts/preprocessor.pkl',
+    'artifacts/scaler.pkl'
+)
+
+data = pd.DataFrame([{
+    'age': 35,
+    'gender': 'M',
+    'region_category': 'City',
+    # ... all other features
+    'feedback': 'Good service'
+}])
+
+result = pipeline.predict(data)
+print(f"Risk Score: {result['predictions'][0]}")
+print(f"Confidence: {result['confidence'][0]*100:.2f}%")
+
+════════════════════════════════════════════════════════════════════════════
+                          SYSTEM STATUS
+════════════════════════════════════════════════════════════════════════════
+
+Training Pipeline:        ✅ Complete
+Prediction Pipeline:      ✅ Fixed and Aligned
+Streamlit App:           ✅ Production Ready
+Documentation:           ✅ Comprehensive
+Testing:                 ⏳ Manual testing required
+Deployment:              ⏳ Ready for deployment
+
+Last Updated: January 12, 2026
+Version: 2.0 (Complete System)
+```

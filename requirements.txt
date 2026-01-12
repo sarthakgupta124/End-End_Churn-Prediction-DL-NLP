@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+tensorflow
+keras
+gensim
+nltk
+matplotlib
+seaborn
+python-dotenv
+dill
+streamlit
+# -e .
