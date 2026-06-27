@@ -10,8 +10,6 @@ from src.components.data_transformation import DataTransformation, DataTransform
 from src.components.Model_trainer import ModelTrainer, ModelTrainerConfig
 
 logger = get_logger(__name__)
-
-
 class TrainingPipeline:
     """Training pipeline to orchestrate the entire ML workflow"""
     
