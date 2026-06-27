@@ -1,0 +1,56 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# .dockerignore — Churn Detection Project
+# Docker reads this before the build context is sent to the daemon.
+# Everything listed here is excluded from the build context, so it never
+# reaches the image even if a COPY . . instruction were used.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Version control ────────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Python byte-code & caches ─────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+venvChurn/
+venv/
+.venv/
+env/
+ENV/
+
+# ── Large training / research data (220 MB — never needed for inference) ───────
+# The Dockerfile copies only the 4 pkl/h5 inference artefacts explicitly,
+# so these CSVs are doubly excluded for safety.
+notebook/
+artifacts/train.csv
+artifacts/test.csv
+artifacts/ingested_data.csv
+notebook/Data/datapoints.csv
+
+# ── Package build artefacts ────────────────────────────────────────────────────
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Runtime logs (fresh log directory is created by logger.py at runtime) ─────
+logs/
+
+# ── Documentation (not needed inside the image) ───────────────────────────────
+README.md
+SYSTEM_ARCHITECTURE.txt
+WORD2VEC_OPTIMIZATION.md
+
+# ── OS / IDE noise ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Environment files (use docker run -e or --env-file at runtime instead) ────
+.env
+*.env
