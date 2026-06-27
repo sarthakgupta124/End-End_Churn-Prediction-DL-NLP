@@ -22,5 +22,5 @@ jobs:
 
     - name: Build and Push Docker Image
       run: |
-        docker build -t churndetection.azurecr.io/ChurnDetection:latest .
-        docker push churndetection.azurecr.io/ChurnDetection:latest
+        docker build -t churndetection.azurecr.io/churndetection:latest .
+        docker push churndetection.azurecr.io/churndetection:latest
